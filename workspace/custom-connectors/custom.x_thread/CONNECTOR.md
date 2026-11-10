@@ -68,6 +68,48 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x
 
 - Keep request volume modest. Syndication calls run one at a time in order, and a single thread build is the intended unit of work. Do not bulk crawl timelines or poll with this helper.
 
+## Direct-network mode (`--direct-network`) — measured notes, Hatch sandbox VM, 2026-11-10–11
+
+Default path:
+
+```
+$ python3 bin/x_thread.py https://x.com/shibanyan_1/status/2082663972772479395
+```
+
+- Egress goes through the forward proxy `hatch-egress-proxy:3128` (from the `https_proxy` environment variable), CONNECT tunnel.
+- TLS certificate presented for x.com on this path: issuer "Hatch Sandbox Egress CA". The connection is verified only as far as the gateway.
+- Exit 0, digest printed.
+
+Direct path:
+
+```
+$ python3 bin/x_thread.py https://x.com/shibanyan_1/status/2082663972772479395 --direct-network
+```
+
+- Proxy environment ignored. `x.com` and `cdn.syndication.twimg.com` taken from `bin/zone.hosts` pins; any other name resolved with DNS-over-HTTPS to Cloudflare, bootstrapped at the literal address `2606:4700:4700::1111` (SNI `cloudflare-dns.com`).
+- TLS certificates: x.com — issuer Let's Encrypt; cdn.syndication.twimg.com — CN `*.twimg.com`, issuer Let's Encrypt.
+- Exit 0. Output byte-identical to the default path for the same thread.
+- On failure: exit 4, error on stderr, no fallback to the proxy (fail-closed).
+- Measured without the permission (2026-11-11): the same command exits 4 in under a second — the connection lands on the gateway instead of the origin (SSL `WRONG_VERSION_NUMBER`). Exit 4 therefore also covers "permission missing"; that is the first thing to check.
+
+### Environment facts behind the mode
+
+- `/etc/hosts` is read-only in this VM (spawnd-managed, bind-mounted), so address pinning lives in `bin/zone.hosts` instead.
+- Direct UDP/53 is refused inside the cell (EPERM); that is why resolution is DoH over TCP, not plain DNS.
+- The mode requires the platform's direct-network access permission for "other TCP connections".
+- Paired observation, recorded as-is: on 2026-11-07, a fetch of research.meta.ai on the default path answered HTTP 403. On 2026-11-11, the same article fetched directly (name resolved over DoH, TLS straight to the origin) answered 200, 200161 bytes, certificate CN `*.meta.ai` issued by DigiCert Inc.
+- Not recommended by default: the mode steps outside the network path the platform provides. Whether to use it is the user's call.
+
+### About `bin/zone.hosts`
+
+- A plain-text file in hosts format (`IP hostname`, one per line). `directnet.py` reads it before any DNS lookup; a name found here never goes to DoH.
+- It exists because `/etc/hosts` is read-only in the Hatch VM, and because some names need pins to be reachable over IPv6 at all: globally, `x.com` and `cdn.syndication.twimg.com` publish A records only, no AAAA.
+- Published defaults: `x.com` is pinned to the Fastly anycast address `2a04:4e42::658`; `cdn.syndication.twimg.com` is pinned to `2a04:4e42::159`, the anycast address of its dual-stack Fastly target, which a hosts file cannot express as a CNAME. The pins are IPv6-only on purpose.
+- Pins take precedence and are taken as-is: if an address goes stale, direct mode fails closed (exit 4) rather than falling back. Edit the file to local taste.
+- Names not listed are resolved with DNS-over-HTTPS (see above).
+
+Supporting files: `bin/directnet.py` (resolution and dialing), `bin/zone.hosts` (the pins, above).
+
 ## Limits
 
 - Replies are limited to what the public conversation page exposes without a login. Some replies stay hidden and the count in the digest is a floor, not a total.

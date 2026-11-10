@@ -28,6 +28,8 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "<url>"
 
 - On exit code 3, check the ID once against the user's URL for a copy mistake. Then report the post as unavailable through this route and offer the browser fallback.
 
+- `--direct-network` is an opt-in flag that makes the connector ignore the environment's forward proxy and connect directly to the origin. It is the user's choice to enable, never the agent's initiative. Exit code 4 means the direct connection failed — a missing direct-network "other TCP connections" permission is the first thing to check. Report it, and do not rerun without the flag.
+
 - Never retry the helper in a loop and never widen it into bulk collection. One shared link is one build.
 
 ## Available connectors
