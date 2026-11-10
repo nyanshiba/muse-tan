@@ -42,12 +42,6 @@ No credentials or connection step are required; the connector descriptor sets `r
 
 This is a **whitelist mirror**, not a home-directory export. Personal files that live at the same level of a real Muse home — `SOUL.md`, `USER.md`, `MEMORY.md`, memories, conversation logs and similar — are deliberately not included, and will not be added. Only code and documentation that are useful to other Muse users are published here.
 
-## Verification status
-
-Verified live against real posts (2026-11-05, updated 2026-11-08): single-post reads, thread reads starting from the root, from a reply, and from the tail of a 5-post self-thread (root and tail runs returned the identical chain, `chain_ok` true), X Article reconstruction including an embedded code block, reply separation, `--json` output, and mirror (fxtwitter/vxtwitter) URL inputs.
-
-Long-form completion was also verified live on @hwchase17's "Your harness, your memory" (article-type; the full 9,137 characters were returned) and on a genuine note\_tweet post by @Nikinik58681513 (syndication alone truncated it at 206 characters; thread mode completed the full 1,215 characters).
-
 ## Notices
 
 - The syndication endpoint used by the helper (`cdn.syndication.twimg.com/tweet-result`) is **unofficial and undocumented**. X can change or retire it without notice; treat sudden failure as an upstream change.
