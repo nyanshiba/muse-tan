@@ -27,7 +27,9 @@ Debug: X_THREAD_DEBUG=1 appends diagnostics to $X_THREAD_LOG
 """
 
 import argparse
+import base64
 import html as htmlmod
+import http.client
 import json
 import os
 import re
@@ -100,30 +102,121 @@ def status_target(url: str):
         return None, url.strip()
     return None
 
+# --- transport ---------------------------------------------------------------
+# The original chains its syndication calls over a single keep-alive
+# connection, and the pages arrive over the host fetch, so a whole thread
+# costs about two TCP connections (NAT-friendly by design). urllib has no
+# connection pool (every urlopen is a fresh TCP+TLS session), so this port
+# keeps one http.client connection per host instead: one persistent
+# connection for the syndication host, one for x.com. Calls stay
+# serialized, one at a time, in order, as in the original.
+#
+# The environment's HTTPS proxy is honored with an explicit CONNECT
+# tunnel. A plain direct TLS connection from some sandboxes fails, so
+# the tunnel setup is deliberate; with no proxy configured the same code
+# connects directly.
 
-# --- syndication -------------------------------------------------------------
-# Calls are serialized (one at a time, in order), as in the original, which
-# chained them over a single keep-alive connection. urllib is used so the
-# VM's HTTPS proxy settings are honored. A plain direct TLS connection from
-# this VM fails, so do not swap this back to http.client.
+
+class KeepAliveHTTPS:
+    """One reusable HTTPS connection to a single host, proxy-aware."""
+
+    def __init__(self, host: str, timeout: float):
+        self.host = host
+        self.timeout = timeout
+        self.conn = None
+
+    def _open(self):
+        proxy = None
+        if not urllib.request.proxy_bypass(self.host):
+            proxies = urllib.request.getproxies()
+            proxy = proxies.get("https") or proxies.get("http")
+        if proxy:
+            pu = urlparse(proxy if "://" in proxy else f"http://{proxy}")
+            conn = http.client.HTTPSConnection(
+                pu.hostname, pu.port or 80, timeout=self.timeout
+            )
+            headers = {}
+            if pu.username:
+                raw = f"{pu.username}:{pu.password or ''}".encode()
+                headers["Proxy-Authorization"] = (
+                    "Basic " + base64.b64encode(raw).decode()
+                )
+            conn.set_tunnel(self.host, 443, headers=headers)
+        else:
+            conn = http.client.HTTPSConnection(
+                self.host, 443, timeout=self.timeout
+            )
+        conn.connect()
+        dlog(f"connect {self.host}")
+        self.conn = conn
+
+    def close(self):
+        if self.conn is not None:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+
+    def get(self, path: str, headers: dict):
+        """GET path on this host. Return (status, headers, body bytes).
+
+        Same-host redirects are followed (up to 5), matching the old
+        urllib behaviour. Raises on transport failure after one retry
+        on a fresh connection, which also covers stale keep-alive
+        connections dropped by the server.
+        """
+        for _hop in range(6):
+            status, resp_headers, body = self._get_once(path, headers)
+            location = resp_headers.get("location") if resp_headers else None
+            if status not in (301, 302, 303, 307, 308) or not location:
+                return status, resp_headers, body
+            lu = urlparse(location)
+            if lu.hostname and lu.hostname != self.host:
+                return status, resp_headers, body
+            path = lu.path or "/"
+            if lu.query:
+                path += "?" + lu.query
+        return status, resp_headers, body
+
+    def _get_once(self, path: str, headers: dict):
+        for attempt in range(2):
+            try:
+                if self.conn is None:
+                    self._open()
+                self.conn.request("GET", path, headers=headers)
+                res = self.conn.getresponse()
+                body = res.read()
+                out = (res.status, res.headers, body)
+                if res.will_close:
+                    self.close()
+                return out
+            except Exception:
+                self.close()
+                if attempt == 1:
+                    raise
+        raise RuntimeError("unreachable")
+
+
+SYND_CLIENT = KeepAliveHTTPS(CDN_HOST, SYND_TIMEOUT)
+PAGE_CLIENT = KeepAliveHTTPS("x.com", PAGE_TIMEOUT)
 
 
 class Syndication:
     def fetch(self, post_id: str):
         """Return the tweet JSON dict, {'__status': ...} for HTTP errors,
         or None for transport/parse failures."""
-        url = f"https://{CDN_HOST}/tweet-result?id={post_id}&lang=en&token=0"
-        req = urllib.request.Request(
-            url,
-            headers={"user-agent": USER_AGENT, "accept": "application/json"},
-        )
+        path = f"/tweet-result?id={post_id}&lang=en&token=0"
         try:
-            with urllib.request.urlopen(req, timeout=SYND_TIMEOUT) as res:
-                text = res.read().decode("utf-8", "replace")
-        except urllib.error.HTTPError as e:
-            return {"__status": e.code}
+            status, _headers, body = SYND_CLIENT.get(
+                path,
+                headers={"user-agent": USER_AGENT, "accept": "application/json"},
+            )
         except Exception:
             return None
+        if status != 200:
+            return {"__status": status}
+        text = body.decode("utf-8", "replace")
         if len(text) <= 2:
             return {"__status": "empty"}
         try:
@@ -144,23 +237,24 @@ SYND = Syndication()
 
 def fetch_page(post_id: str, author: str) -> str:
     """Fetch the unauthenticated x.com status page HTML, or '' on failure."""
-    url = f"https://x.com/{author}/status/{post_id}"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "user-agent": USER_AGENT,
-            "accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-            "accept-language": "en",
-        },
-    )
+    path = f"/{author}/status/{post_id}"
     try:
-        with urllib.request.urlopen(req, timeout=PAGE_TIMEOUT) as res:
-            ct = (res.headers.get("content-type") or "").lower()
-            if ct and "html" not in ct:
-                return ""
-            return res.read().decode("utf-8", "replace")
+        status, headers, body = PAGE_CLIENT.get(
+            path,
+            headers={
+                "user-agent": USER_AGENT,
+                "accept": "text/html,application/xhtml+xml,*/*;q=0.8",
+                "accept-language": "en",
+            },
+        )
     except Exception:
         return ""
+    if status != 200:
+        return ""
+    ct = (headers.get("content-type") or "").lower()
+    if ct and "html" not in ct:
+        return ""
+    return body.decode("utf-8", "replace")
 
 
 # --- payload shaping ---------------------------------------------------------
