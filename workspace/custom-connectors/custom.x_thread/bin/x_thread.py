@@ -115,6 +115,35 @@ def status_target(url: str):
 # tunnel. A plain direct TLS connection from some sandboxes fails, so
 # the tunnel setup is deliberate; with no proxy configured the same code
 # connects directly.
+#
+# With --direct-network, the transport swaps to the directnet module
+# instead: names are resolved from a local zone file or DNS-over-HTTPS
+# and connections go straight to the origin, ignoring the proxy
+# environment entirely. That mode is fail-closed. A direct failure is
+# reported (exit code 4) and nothing falls back to the proxy.
+
+DIRECT_NETWORK = False
+_dn = None
+
+
+def _directnet():
+    global _dn
+    if _dn is None:
+        import importlib
+        import importlib.util
+
+        try:
+            _dn = importlib.import_module("directnet")
+        except ImportError:
+            spec = importlib.util.spec_from_file_location(
+                "directnet",
+                os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), "directnet.py"
+                ),
+            )
+            _dn = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(_dn)
+    return _dn
 
 
 class KeepAliveHTTPS:
@@ -126,6 +155,12 @@ class KeepAliveHTTPS:
         self.conn = None
 
     def _open(self):
+        if DIRECT_NETWORK:
+            conn = http.client.HTTPConnection(self.host, timeout=self.timeout)
+            conn.sock = _directnet().open_tls(self.host, 443, self.timeout)
+            dlog(f"connect {self.host} (direct)")
+            self.conn = conn
+            return
         proxy = None
         if not urllib.request.proxy_bypass(self.host):
             proxies = urllib.request.getproxies()
@@ -212,7 +247,11 @@ class Syndication:
                 path,
                 headers={"user-agent": USER_AGENT, "accept": "application/json"},
             )
-        except Exception:
+        except Exception as e:
+            if DIRECT_NETWORK:
+                raise _directnet().DirectError(
+                    f"direct: syndication fetch failed for {post_id}: {e}"
+                )
             return None
         if status != 200:
             return {"__status": status}
@@ -247,7 +286,11 @@ def fetch_page(post_id: str, author: str) -> str:
                 "accept-language": "en",
             },
         )
-    except Exception:
+    except Exception as e:
+        if DIRECT_NETWORK:
+            raise _directnet().DirectError(
+                f"direct: page fetch failed for {post_id}: {e}"
+            )
         return ""
     if status != 200:
         return ""
@@ -804,7 +847,16 @@ def main(argv=None) -> int:
         default="thread",
         help="thread builds the whole author thread (default). post reads only the one post via syndication, with no page fetch.",
     )
+    ap.add_argument(
+        "--direct-network",
+        action="store_true",
+        help="connect directly to the origin, ignoring any forward proxy in the environment. Names are resolved from a local zone file or DNS-over-HTTPS. Fail-closed: a direct failure exits with code 4 and never falls back to the proxy.",
+    )
     args = ap.parse_args(argv)
+
+    if args.direct_network:
+        global DIRECT_NETWORK
+        DIRECT_NETWORK = True
 
     target = status_target(args.target)
     if target is None:
@@ -813,7 +865,13 @@ def main(argv=None) -> int:
     _author_hint, start_id = target
 
     if args.mode == "post":
-        j = SYND.fetch(start_id)
+        try:
+            j = SYND.fetch(start_id)
+        except Exception as e:
+            if DIRECT_NETWORK:
+                print(f"error: direct-network failed: {e}", file=sys.stderr)
+                return 4
+            raise
         if not j or "__status" in j:
             print(f"error: post {start_id} unavailable via syndication", file=sys.stderr)
             return 3
@@ -839,6 +897,11 @@ def main(argv=None) -> int:
     except LookupError:
         print(f"error: start post {start_id} unavailable via syndication", file=sys.stderr)
         return 3
+    except Exception as e:
+        if DIRECT_NETWORK:
+            print(f"error: direct-network failed: {e}", file=sys.stderr)
+            return 4
+        raise
 
     if args.json:
         print(json.dumps(to_json(t), ensure_ascii=False, indent=2))

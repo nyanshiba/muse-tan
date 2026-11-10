@@ -1,0 +1,9 @@
+# Zone pins for direct-network mode (hosts format: IP hostname).
+# Names not listed here are resolved with DNS-over-HTTPS instead.
+# Public DNS returns no AAAA for x.com, so the IPv6 pin below (the
+# anycast address) is the only IPv6 path. The syndication name is
+# pinned to the anycast address of its dual-stack Fastly target,
+# which a hosts file cannot express as a CNAME. IPv6 only, on
+# purpose: getting traffic onto IPv6 is the point of these pins.
+2a04:4e42::658 x.com
+2a04:4e42::159 cdn.syndication.twimg.com
