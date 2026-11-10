@@ -22,7 +22,7 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "<url>"
 
 - Present an article post's body as the article. Its heading lines and any fenced code block are part of the article, so do not drop a code block when the user asked for the full text.
 
-- Watch the completeness signals. A thread count of 1 for a post the user described as a thread, a note that stayed short, or replies that look sparse can mean the public page exposed only part of the conversation. Say what was actually retrieved, including the reply count, instead of claiming the whole conversation.
+- The digest flags its own gaps. When a build is degraded, it ends with `[x-thread] notes:` lines naming what may be missing. Those lines are part of the result, so relay the limitation they name instead of presenting the digest as complete.
 
 ## Handle failures
 
@@ -32,8 +32,8 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "<url>"
 
 ## Available connectors
 
-- [X Thread (no browser)](~/workspace/custom-connectors/custom.x_thread/CONNECTOR.md) for the helper's commands, output format, error codes and limits.
+- [X Thread (no browser)](../../custom-connectors/custom.x_thread/CONNECTOR.md) for the helper's commands, output format, error codes and limits.
 
 - Use `muse.connector_search` to find other connectors and `muse.skill_search` to find related skills.
 
-- If nothing here fits, look on the web for a maintained API or MCP server and set it up with [Custom Connectors and MCPs](/opt/muse/skills/custom-connector-setup/SKILL.md), or build a custom connector.
+- If nothing here fits, look on the web for a maintained API or MCP server and set it up with the Custom Connectors and MCPs skill, or build a custom connector.

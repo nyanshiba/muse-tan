@@ -28,6 +28,8 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x
 
 - Accepted inputs are `x.com` and `twitter.com` status URLs (including `www.`, `mobile.`, `m.` and `/statuses/`), `fxtwitter.com` and `vxtwitter.com` mirror URLs, `publish.twitter.com` oembed URLs that wrap a status URL, and a bare numeric post ID.
 
+- Transport is NAT-friendly, like the original. Requests are serialized and carried on one persistent keep-alive connection per host (one for the syndication host, one for x.com), through an explicit CONNECT tunnel when a proxy is configured. Measured 2026-11-10 by counting socket connect calls for a 5-post thread fetch: 24 connections with the previous per-request urllib transport, 3 with keep-alive (the designed pair plus one re-establishment). Thread and article outputs were byte-identical before and after the change.
+
 - The digest starts with a header line `[x-thread] @<author> / <n> posts / root=<id> / start=<id>`, then the thread body numbered in order with t.co links already expanded. Quoted posts, other authors on the start path, and replies by others follow in their own marked sections.
 
 - Add `--json` when a later step needs fields instead of prose. The JSON carries `posts`, `ancestors`, `replies`, `quoted`, `excluded` and a `diagnostics` object with `chain_ok`, `start_included`, `notes_completed` and `tco_remaining`.
@@ -62,7 +64,7 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x
 
 - Exit code 3 means the start post was unavailable through syndication. The post may be deleted, protected, or the endpoint may have changed. Report that and fall back to the browser or `social.search` instead of retrying in a loop.
 
-- An empty or short page result only disables the page-dependent parts. The thread body from syndication is still returned, so a digest with no down-chain and no note completion usually means the page fetch failed, not that the thread has no continuation.
+- An empty or short page result only disables the page-dependent parts. The thread body from syndication is still returned, so a digest with no down-chain and no note completion usually means the page fetch failed, not that the thread has no continuation. The digest flags this itself: a degraded build ends with `[x-thread] notes:` lines naming what may be missing, and `--json` carries the same signals as `diagnostics.start_page_ok` and `diagnostics.uncompleted_longform`.
 
 - Keep request volume modest. Syndication calls run one at a time in order, and a single thread build is the intended unit of work. Do not bulk crawl timelines or poll with this helper.
 
@@ -82,6 +84,6 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x
 
 ## Related skills
 
-- [Read X Posts and Threads](~/workspace/custom-skills/x_post_fetch/SKILL.md)
+- [Read X Posts and Threads](../../custom-skills/x_post_fetch/SKILL.md)
 
 - Use `muse.skill_search` to find other skills and `muse.connector_search` to find other connectors.
