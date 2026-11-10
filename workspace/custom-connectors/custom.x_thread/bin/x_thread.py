@@ -503,6 +503,8 @@ class Thread:
         self.replies = []
         self.quoted = []
         self.excluded = 0
+        self.start_page_ok = True
+        self.uncompleted_longform = 0
 
 
 def adopt(t: Thread, post: dict, known: set) -> bool:
@@ -577,6 +579,7 @@ def build(start_id: str) -> Thread:
     start_html = ""
     if start_post:
         start_html = load_page(start_id, start_post["author"])
+    t.start_page_ok = bool(start_html)
 
     # Feature 1, down: extend the author's self-chain to its end.
     for hop in range(MAX_HOPS):
@@ -615,6 +618,8 @@ def build(start_id: str) -> Thread:
             if full:
                 p["full_text"] = full
                 dlog(f"article completed: {p['id']} -> {len(full)} chars")
+            else:
+                t.uncompleted_longform += 1
             continue
         if not p["is_note"]:
             continue
@@ -627,6 +632,8 @@ def build(start_id: str) -> Thread:
                 if link["tco"] not in seen:
                     p["links"].append(link)
             dlog(f"note completed: {p['id']} {len(p['text'])} -> {len(full)}")
+        else:
+            t.uncompleted_longform += 1
 
     t.posts.sort(key=lambda p: id_cmp_key(p["id"]))
     t.replies.sort(key=lambda p: id_cmp_key(p["id"]))
@@ -713,6 +720,26 @@ def render(t: Thread) -> str:
         for p in t.replies:
             lines.append(f"- {p['id']} · @{p['author']} · {p.get('created_at') or '?'} → {p['parent']}")
             lines.append(f"  {post_text(p).replace(chr(10), ' ')}")
+    notes = []
+    if not t.start_page_ok:
+        notes.append(
+            "the start post's page could not be fetched, so the continuation, "
+            "the replies and long-form completion may be missing. The posts "
+            "above come from syndication and are complete as far as they go."
+        )
+    if t.uncompleted_longform:
+        notes.append(
+            f"{t.uncompleted_longform} long-form post(s) could not be completed "
+            "from their pages, so their text may be truncated."
+        )
+    if t.replies:
+        notes.append(
+            "the reply list shows only what the public page exposes without a "
+            "login, so its count is a floor, not a total."
+        )
+    if notes:
+        lines += ["", "[x-thread] notes:"]
+        lines += [f"- {n}" for n in notes]
     return "\n".join(lines)
 
 
@@ -761,6 +788,8 @@ def to_json(t: Thread) -> dict:
             ),
             "notes_completed": sum(1 for p in t.posts if p.get("full_text")),
             "tco_remaining": len(re.findall(r"https://t\.co/\w+", render(t))),
+            "start_page_ok": t.start_page_ok,
+            "uncompleted_longform": t.uncompleted_longform,
         },
     }
 
