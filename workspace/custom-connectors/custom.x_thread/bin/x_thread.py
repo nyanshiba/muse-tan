@@ -16,8 +16,13 @@ Features (same numbering as the original):
   3. Quoted posts, followed until no new quote appears.
   4. Note tweets: full text recovered from the page HTML, t.co expanded.
 
+Addition in this port: with --media, photo attachments are downloaded
+(small variant) from pbs.twimg.com to ~/workspace/x-thread-media/<post id>/
+and their paths are listed in the output. Videos and GIFs are not
+supported.
+
 Usage:
-  x_thread.py <status-url | post-id> [--json] [--mode thread|post]
+  x_thread.py <status-url | post-id> [--json] [--mode thread|post] [--media]
   x_thread.py https://x.com/eris_create_lab/status/1985660000000000000
 
 Exit codes: 0 ok, 2 bad target, 3 start post unavailable, 4 fetch failed.
@@ -235,6 +240,13 @@ class KeepAliveHTTPS:
 
 SYND_CLIENT = KeepAliveHTTPS(CDN_HOST, SYND_TIMEOUT)
 PAGE_CLIENT = KeepAliveHTTPS("x.com", PAGE_TIMEOUT)
+MEDIA_CLIENT = KeepAliveHTTPS("pbs.twimg.com", 60)
+
+MEDIA_ENABLED = False
+MEDIA_DIR = os.path.expanduser("~/workspace/x-thread-media")
+MEDIA_VARIANT = "small"
+MEDIA_MAX_FILES = 20
+MEDIA_MAX_BYTES = 20 * 1024 * 1024
 
 
 class Syndication:
@@ -315,6 +327,27 @@ def links_of(j) -> list:
     return out
 
 
+def photos_of(j) -> list:
+    """Photo attachments of a syndication payload, as download descriptors.
+
+    Only type "photo" entries are returned. Videos and animated GIFs are
+    dropped here, at the shaping boundary, so they never reach the media
+    download or the output at all: videos and GIFs are not supported.
+    """
+    out = []
+    for m in (j or {}).get("mediaDetails") or []:
+        if not isinstance(m, dict) or m.get("type") != "photo":
+            continue
+        url = m.get("media_url_https")
+        if not url:
+            continue
+        info = m.get("original_info") or {}
+        out.append(
+            {"url": url, "width": info.get("width"), "height": info.get("height")}
+        )
+    return out
+
+
 def expand_links(text: str, links: list) -> str:
     out = text
     for link in sorted(links, key=lambda l: -len(l["tco"])):
@@ -333,6 +366,7 @@ def to_tweet(j) -> dict:
                 "author": (quoted.get("user") or {}).get("screen_name") or "?",
                 "text": quoted.get("text") or "",
                 "links": links_of(quoted),
+                "media": photos_of(quoted),
             }
         )
     article = (j or {}).get("article") or {}
@@ -349,6 +383,7 @@ def to_tweet(j) -> dict:
         "parent": j.get("in_reply_to_status_id_str") or None,
         "quotes": quotes,
         "links": links_of(j),
+        "media": photos_of(j),
     }
 
 
@@ -548,6 +583,7 @@ class Thread:
         self.excluded = 0
         self.start_page_ok = True
         self.uncompleted_longform = 0
+        self.media_notes = []
 
 
 def adopt(t: Thread, post: dict, known: set) -> bool:
@@ -703,6 +739,7 @@ def build(start_id: str) -> Thread:
                 entry["q"]["author"] = (j.get("user") or {}).get("screen_name") or entry["q"]["author"]
                 entry["q"]["text"] = j.get("text") or entry["q"]["text"]
                 entry["q"]["links"] = links_of(j)
+                entry["q"]["media"] = photos_of(j)
             qt = j.get("quoted_tweet") or {}
             if qt.get("id_str"):
                 nid = str(qt["id_str"])
@@ -713,6 +750,7 @@ def build(start_id: str) -> Thread:
                             "author": (qt.get("user") or {}).get("screen_name") or "?",
                             "text": qt.get("text") or "",
                             "links": links_of(qt),
+                            "media": photos_of(qt),
                         },
                         "quote_of": qid,
                     }
@@ -727,6 +765,84 @@ def build(start_id: str) -> Thread:
 
     dlog(f"build total: ms={int((time.time() - t0) * 1000)}")
     return t
+
+
+# --- media download (opt-in, --media) ----------------------------------------
+# Photos only: videos and animated GIFs never reach this code (photos_of
+# drops them). Downloads are the small variant; each JSON record also
+# carries the medium URL so the reader can escalate on its own. Files land
+# under MEDIA_DIR/<post id>/ and an existing file is reused, not refetched.
+
+
+def _media_path(post_id: str, index: int, url: str) -> str:
+    ext = os.path.splitext(urlparse(url).path)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+        ext = ".jpg"
+    return os.path.join(MEDIA_DIR, post_id, f"{index}-{MEDIA_VARIANT}{ext}")
+
+
+def _media_line(f: dict) -> str:
+    dims = f"{f['width']}x{f['height']}" if f.get("width") and f.get("height") else ""
+    return f"[media] photo {dims} -> {f['path']}".replace("  ", " ")
+
+
+def fetch_media(posts) -> list:
+    """Download photos for an iterable of post/quoted dicts, setting
+    p["media_files"] on each that has any. Returns failure notes.
+    A transport failure in direct mode raises DirectError (exit 4);
+    HTTP errors and oversize bodies degrade to notes in both modes."""
+    notes = []
+    failed = 0
+    count = 0
+    capped = False
+    for p in posts:
+        files = []
+        for i, m in enumerate(p.get("media") or []):
+            if count >= MEDIA_MAX_FILES:
+                capped = True
+                break
+            path = _media_path(p["id"], i + 1, m["url"])
+            if not (os.path.isfile(path) and os.path.getsize(path) > 0):
+                req = urlparse(m["url"]).path + f"?name={MEDIA_VARIANT}"
+                try:
+                    status, _h, body = MEDIA_CLIENT.get(
+                        req,
+                        headers={"user-agent": USER_AGENT, "accept": "image/*,*/*"},
+                    )
+                except Exception as e:
+                    if DIRECT_NETWORK:
+                        raise _directnet().DirectError(
+                            f"direct: media fetch failed for post {p['id']}: {e}"
+                        )
+                    failed += 1
+                    continue
+                if status != 200 or not body or len(body) > MEDIA_MAX_BYTES:
+                    failed += 1
+                    continue
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "wb") as fh:
+                    fh.write(body)
+            count += 1
+            files.append(
+                {
+                    "type": "photo",
+                    "width": m.get("width"),
+                    "height": m.get("height"),
+                    "path": path,
+                    "url": m["url"],
+                    "medium_url": m["url"] + "?name=medium",
+                }
+            )
+        if files:
+            p["media_files"] = files
+    if capped:
+        notes.append(
+            f"media download stopped after {MEDIA_MAX_FILES} files (run cap); "
+            "later images were not fetched."
+        )
+    if failed:
+        notes.append(f"{failed} image(s) could not be downloaded.")
+    return notes
 
 
 # --- rendering ---------------------------------------------------------------
@@ -744,11 +860,15 @@ def render(t: Thread) -> str:
     lines = [head]
     for i, p in enumerate(t.posts):
         lines += ["", f"{i + 1}. {p['id']} · {p.get('created_at') or '?'}", post_text(p)]
+        for f in p.get("media_files") or []:
+            lines.append(_media_line(f))
     if t.quoted:
         lines += ["", f"[x-thread] quoted by the thread ({len(t.quoted)}):"]
         for q in t.quoted:
             lines.append(f"- {q['id']} · @{q['author']} · quoted by {q['quote_of']}")
             lines.append(f"  {expand_links(q['text'], q['links']).replace(chr(10), ' ')}")
+            for f in q.get("media_files") or []:
+                lines.append(f"  {_media_line(f)}")
     if t.ancestors:
         lines += [
             "",
@@ -758,6 +878,8 @@ def render(t: Thread) -> str:
         for p in t.ancestors:
             lines.append(f"- {p['id']} · @{p['author']} · {p.get('created_at') or '?'} → {p['parent'] or '-'}")
             lines.append(f"  {post_text(p).replace(chr(10), ' ')}")
+            for f in p.get("media_files") or []:
+                lines.append(f"  {_media_line(f)}")
     if t.replies:
         lines += ["", f"[x-thread] replies by others ({len(t.replies)}):"]
         for p in t.replies:
@@ -780,6 +902,7 @@ def render(t: Thread) -> str:
             "the reply list shows only what the public page exposes without a "
             "login, so its count is a floor, not a total."
         )
+    notes += t.media_notes
     if notes:
         lines += ["", "[x-thread] notes:"]
         lines += [f"- {n}" for n in notes]
@@ -800,6 +923,20 @@ def to_json(t: Thread) -> dict:
             "parent": p["parent"],
             "url": f"https://x.com/{p['author']}/status/{p['id']}",
         }
+        if p.get("media_files"):
+            d["media"] = p["media_files"]
+        return d
+
+    def _shape_quoted(q):
+        d = {
+            "id": q["id"],
+            "author": q["author"],
+            "text": expand_links(q["text"], q["links"]),
+            "quote_of": q["quote_of"],
+            "url": f"https://x.com/{q['author']}/status/{q['id']}",
+        }
+        if q.get("media_files"):
+            d["media"] = q["media_files"]
         return d
 
     chain_ok = all(
@@ -813,16 +950,7 @@ def to_json(t: Thread) -> dict:
         "posts": [shape(p) for p in t.posts],
         "ancestors": [shape(p) for p in t.ancestors],
         "replies": [shape(p) for p in t.replies],
-        "quoted": [
-            {
-                "id": q["id"],
-                "author": q["author"],
-                "text": expand_links(q["text"], q["links"]),
-                "quote_of": q["quote_of"],
-                "url": f"https://x.com/{q['author']}/status/{q['id']}",
-            }
-            for q in t.quoted
-        ],
+        "quoted": [_shape_quoted(q) for q in t.quoted],
         "excluded": t.excluded,
         "diagnostics": {
             "chain_ok": chain_ok,
@@ -852,11 +980,18 @@ def main(argv=None) -> int:
         action="store_true",
         help="connect directly to the origin, ignoring any forward proxy in the environment. Names are resolved from a local zone file or DNS-over-HTTPS. Fail-closed: a direct failure exits with code 4 and never falls back to the proxy.",
     )
+    ap.add_argument(
+        "--media",
+        action="store_true",
+        help="also download photo attachments (small variant) to ~/workspace/x-thread-media/<post id>/ and list the saved paths in the output. Videos and GIFs are not supported.",
+    )
     args = ap.parse_args(argv)
 
+    global DIRECT_NETWORK, MEDIA_ENABLED
     if args.direct_network:
-        global DIRECT_NETWORK
         DIRECT_NETWORK = True
+    if args.media:
+        MEDIA_ENABLED = True
 
     target = status_target(args.target)
     if target is None:
@@ -876,20 +1011,38 @@ def main(argv=None) -> int:
             print(f"error: post {start_id} unavailable via syndication", file=sys.stderr)
             return 3
         p = to_tweet(j)
+        media_notes = []
+        if MEDIA_ENABLED:
+            try:
+                media_notes = fetch_media([p])
+            except Exception as e:
+                if DIRECT_NETWORK:
+                    print(f"error: direct-network failed: {e}", file=sys.stderr)
+                    return 4
+                raise
         if args.json:
-            print(json.dumps({"posts": [{
+            pd = {
                 "id": p["id"], "author": p["author"], "created_at": p["created_at"],
                 "text": post_text(p), "is_note": p["is_note"],
                 "is_article": p["is_article"], "article_title": p["article_title"],
                 "parent": p["parent"],
                 "url": f"https://x.com/{p['author']}/status/{p['id']}",
-            }]}, ensure_ascii=False, indent=2))
+            }
+            if p.get("media_files"):
+                pd["media"] = p["media_files"]
+            print(json.dumps({"posts": [pd]}, ensure_ascii=False, indent=2))
         else:
             print(f"[x-thread] @{p['author']} / 1 post / start={start_id}")
             print(f"\n1. {p['id']} · {p.get('created_at') or '?'}")
             print(post_text(p))
+            for f in p.get("media_files") or []:
+                print(_media_line(f))
             if p["is_note"] or p["is_article"]:
                 print("\n[x-thread] long-form post: text may be truncated in post mode. Use --mode thread for the full text.")
+            if media_notes:
+                print("\n[x-thread] notes:")
+                for n in media_notes:
+                    print(f"- {n}")
         return 0
 
     try:
@@ -902,6 +1055,17 @@ def main(argv=None) -> int:
             print(f"error: direct-network failed: {e}", file=sys.stderr)
             return 4
         raise
+
+    if MEDIA_ENABLED:
+        try:
+            t.media_notes = fetch_media(
+                list(t.posts) + list(t.ancestors) + list(t.quoted)
+            )
+        except Exception as e:
+            if DIRECT_NETWORK:
+                print(f"error: direct-network failed: {e}", file=sys.stderr)
+                return 4
+            raise
 
     if args.json:
         print(json.dumps(to_json(t), ensure_ascii=False, indent=2))
