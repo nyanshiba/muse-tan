@@ -12,6 +12,8 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "<url>"
 
 - Use `--mode post` only when the user wants the single post and speed matters more than completeness. Say that long-form text may be truncated in that mode.
 
+- When a post's substance may live in its images — screenshots of documents, settings, or chat logs are the common case — add `--media`. If a saved small copy is not legible, fetch the `medium_url` from the `--json` output for a larger copy. Videos and GIFs are not supported.
+
 - Fall back to `browser.open`, `browser.browse` or `social.search` only when the helper reports the post unavailable, or when the user needs something this route cannot give, such as media viewing or a logged-in view. Name which route actually produced the text when you report back.
 
 ## Read the result

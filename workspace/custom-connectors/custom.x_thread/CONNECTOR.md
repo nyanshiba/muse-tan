@@ -44,6 +44,12 @@ python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x
 python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x.com/<user>/status/<id>" --mode post
 ```
 
+- Add `--media` to also download photo attachments. Each photo is saved in its small variant under `~/workspace/x-thread-media/<post id>/`, the digest lists one `[media] photo <w>x<h> -> <path>` line per file under its post, and `--json` gives each post a `media` array whose entries carry the saved `path`, the original dimensions, the source `url` and a `medium_url` for a larger copy. The scope is the thread body, the start path and quoted posts, not replies; at most 20 files are downloaded per run, and an already-saved file is reused instead of downloaded again. A failed download degrades to a `[x-thread] notes:` line; in direct-network mode a media transport failure is exit 4, like any other direct failure. Videos and GIFs are not supported and return text only.
+
+```text
+python3 ~/workspace/custom-connectors/custom.x_thread/bin/x_thread.py "https://x.com/<user>/status/<id>" --media
+```
+
 ## What the build does
 
 - The walk goes up first, following reply parents in the syndication payload until the root, so starting from any post in a thread returns the whole thread.
@@ -103,8 +109,8 @@ $ python3 bin/x_thread.py https://x.com/shibanyan_1/status/2082663972772479395 -
 ### About `bin/zone.hosts`
 
 - A plain-text file in hosts format (`IP hostname`, one per line). `directnet.py` reads it before any DNS lookup; a name found here never goes to DoH.
-- It exists because `/etc/hosts` is read-only in the Hatch VM, and because some names need pins to be reachable over IPv6 at all: globally, `x.com` and `cdn.syndication.twimg.com` publish A records only, no AAAA.
-- Published defaults: `x.com` is pinned to the Fastly anycast address `2a04:4e42::658`; `cdn.syndication.twimg.com` is pinned to `2a04:4e42::159`, the anycast address of its dual-stack Fastly target, which a hosts file cannot express as a CNAME. The pins are IPv6-only on purpose.
+- It exists because `/etc/hosts` is read-only in the Hatch VM, and because some names need pins to be reachable over IPv6 at all: globally, `x.com`, `cdn.syndication.twimg.com` and `pbs.twimg.com` publish A records only, no AAAA.
+- Published defaults: `x.com` is pinned to the Fastly anycast address `2a04:4e42::658`; `cdn.syndication.twimg.com` is pinned to `2a04:4e42::159`, the anycast address of its dual-stack Fastly target, which a hosts file cannot express as a CNAME; `pbs.twimg.com` is pinned to the same `2a04:4e42::159`. The pins are IPv6-only on purpose.
 - Pins take precedence and are taken as-is: if an address goes stale, direct mode fails closed (exit 4) rather than falling back. Edit the file to local taste.
 - Names not listed are resolved with DNS-over-HTTPS (see above).
 
@@ -118,7 +124,7 @@ Supporting files: `bin/directnet.py` (resolution and dialing), `bin/zone.hosts` 
 
 - Note completion covers the thread body only. Notes quoted by the thread, and notes in replies, stay truncated, matching the original.
 
-- Media is not downloaded. Image and video posts come back as their text and expanded media links only.
+- Media downloads are opt-in (`--media`) and cover photos only, in the small variant. Videos and GIFs are not supported and return text only.
 
 - Verification status, checked 2026-11-05 and updated 2026-11-08. Single post reads, the article build with its code block, reply separation, starting from a reply, JSON output and mirror URLs were all run live against real posts. The self-chain adoption in the down walk was covered by unit tests only until 2026-11-08, when it was verified live against a real long self-thread: @shibanyan_1's 5-post self-thread (root 2082663972772479395, posted 2026-07-30 to 2026-08-04). Runs starting from the root and from the last post returned the identical 5 posts in order, every post's parent matched the previous post, and diagnostics reported chain_ok and start_included true with tco_remaining 0; no self-reply was left in the replies section. Long-form completion was also run live on @hwchase17's "Your harness, your memory" (2042978500567609738, first fetched 2026-11-06 and re-run 2026-11-08): the full 9,137 characters were returned with note_completed true; in the helper's classification that post is article-type (is_article). The note_tweet-specific branch was then also verified live on 2026-11-08 against @Nikinik58681513's note post (2118596647467020576, is_note true, is_article false): syndication alone returned 206 truncated characters, thread mode completed the full 1,215 characters with note_completed true and tco_remaining 0.
 
