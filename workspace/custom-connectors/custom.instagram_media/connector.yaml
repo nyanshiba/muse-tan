@@ -1,0 +1,6 @@
+id: "custom.instagram_media"
+title: "Instagram Collection Media (embed, no login)"
+description: "Fetch small images for posts in the user's Instagram saved collection 「Museたん用」 from the anonymous embed endpoint, without a browser, login or API key, so Muse can read the outfits directly."
+include_in_prompt: false
+require_auth: false
+aliases: ["instagram media fetcher", "Instagram画像取得", "コレクション画像"]

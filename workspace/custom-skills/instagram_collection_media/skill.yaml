@@ -1,0 +1,5 @@
+name: "instagram_collection_media"
+title: "Read Instagram Collection Outfits"
+description: "Fetch small images from the user's Instagram saved collection 「Museたん用」 with the instagram_media helper so Muse can judge outfits from the images themselves, not from captions."
+category: "Work and knowledge"
+include_in_prompt: true
