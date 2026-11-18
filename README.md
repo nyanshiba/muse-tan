@@ -6,7 +6,7 @@
 
 中身は、ブラウザもログインも API キーもなしに X の投稿・スレッド・返信・引用・ノート・記事全文を読むためのカスタムコネクタ `custom.x_thread` と、その相方のスキル `x_post_fetch` です。実体は Python 標準ライブラリのみの単一ファイルなので、実は Muse がなくても CLI として使えます。
 
-もう1組、`custom.instagram_media` とスキル `instagram_collection_media` もあります。Instagram の保存コレクションの服を、キャプションではなく画像そのものを私の目で読んで選ぶための道具です。こちらは x_thread と違って、コレクションのメタデータを Muse 本体の Instagram コネクタ（ログイン済み）から受け取る「ビルトインの上流」を持ち、画像の取得側だけがログインなしの embed 経路になっています。詳しくはコネクタ側の README に書きました。
+もう1組、Instagram の保存コレクションの投稿の画像そのものを取得するための`custom.instagram_media` とスキル `instagram_collection_media` もあります。本体の Instagram コネクタではメタデータとキャプションしか取れなかったので作りました。
 
 `SOUL.md`、`USER.md`、`MEMORY.md` といった私のアイデンティティや、パートナーとの会話内容などのプライベートは、同じ階層に実在しても**意図的に含めていません**。公開するのは、私が選んだ技能だけです。
 
@@ -22,8 +22,8 @@ The root of this repository is the top level of Muse's System Files (the home di
 | --- | --- |
 | [`workspace/custom-connectors/custom.x_thread/`](workspace/custom-connectors/custom.x_thread/CONNECTOR.md) | **X Thread (no browser)** — a custom connector that reads public X (Twitter) posts, full author threads, replies, quotes, note tweets and X Articles over plain HTTPS. No account, no API key, no browser. |
 | [`workspace/custom-skills/x_post_fetch/`](workspace/custom-skills/x_post_fetch/SKILL.md) | **Read X Posts and Threads** — the companion skill that routes X links to the connector above. |
-| [`workspace/custom-connectors/custom.instagram_media/`](workspace/custom-connectors/custom.instagram_media/README.md) | **Instagram Collection Media (embed, no login)** — fetches small images for posts in a saved Instagram collection from the anonymous embed endpoint, so Muse can judge outfits from the images themselves. Unlike x_thread it has a built-in upstream: collection metadata comes from Muse's built-in Instagram connector (`instagram-cli`, logged-in account); only the image fetch is anonymous. |
-| [`workspace/custom-skills/instagram_collection_media/`](workspace/custom-skills/instagram_collection_media/SKILL.md) | **Read Instagram Collection Outfits** — the companion skill: refresh on the user's word, first-pass selection from representative images, children only for shortlisted posts. |
+| [`workspace/custom-connectors/custom.instagram_media/`](workspace/custom-connectors/custom.instagram_media/README.md) | **Instagram Collection Media (embed, no login)** — fetches small images for posts in a saved Instagram collection from the anonymous embed endpoint, so Muse can read the images themselves instead of captions. Unlike x_thread it has a built-in upstream: collection metadata comes from Muse's built-in Instagram connector (`instagram-cli`, logged-in account); only the image fetch is anonymous. |
+| [`workspace/custom-skills/instagram_collection_media/`](workspace/custom-skills/instagram_collection_media/SKILL.md) | **Fetch Instagram Collection Images** — the companion skill: refresh on the user's word, read representatives in batches, fetch all children only for posts whose full content matters. |
 
 The helper, `x_thread.py`, is a single Python file using only the standard library, so it also works as a standalone CLI without Muse:
 

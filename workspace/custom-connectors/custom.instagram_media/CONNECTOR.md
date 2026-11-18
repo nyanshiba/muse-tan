@@ -1,8 +1,8 @@
 # Instagram Collection Media (embed, no login)
 
-- `custom.instagram_media` fetches images for posts in nyanshiba's Instagram saved collection 「Museたん用」. It needs no account, no cookie, no API key and no browser.
+- `custom.instagram_media` fetches images for posts in an Instagram saved collection. It needs no account, no cookie, no API key and no browser.
 - The helper is `~/workspace/custom-connectors/custom.instagram_media/bin/instagram_media.py`. Its only inputs are the collection metadata file `~/workspace/instagram/muse-collection.json` (produced by `instagram-cli saved-posts`) and shortcodes derived from each item's permalink.
-- Agreed scope (2026-11-14): this collection only; fashion learning and outfit reference for Muse's photos; no constant patrol — runs happen on nyanshiba's word (e.g. when he says he added items) or inside a selection/shoot session he started. Originals of fetched images are never published, shared or sent anywhere.
+- Agreed scope (2026-11-14): one designated collection only; personal reference use; no constant patrol — runs happen on the user's word (e.g. when he says he added items) or inside a session he started. Originals of fetched images are never published, shared or sent anywhere.
 
 ## Route
 
@@ -45,9 +45,9 @@ python3 ~/workspace/custom-connectors/custom.instagram_media/bin/instagram_media
 
 ## Fallback (og:image)
 
-- Some posts (observed: shisha, underwear-ad, Fantia/sister posts — sensitive or branded) serve the logged-out app shell instead of embed media. For those, `fetch_post` falls back to the post page's `og:image`: a 640x640 centre crop of the first image, saved as the representative with an `og-fallback ... provisional` note in the manifest. Treat those representatives as hold/undecided grade, never as a full outfit read. One post (CqIWx_JLduv, iyori_nu) had no og:image either and is unreachable anonymously.
+- Some posts (observed: shisha, underwear-ad, Fantia/sister posts — sensitive or branded) serve the logged-out app shell instead of embed media. For those, `fetch_post` falls back to the post page's `og:image`: a 640x640 centre crop of the first image, saved as the representative with an `og-fallback ... provisional` note in the manifest. Treat those representatives as hold/undecided grade, never as a full read of the post. One post (CqIWx_JLduv, iyori_nu) had no og:image either and is unreachable anonymously.
 
 ## Verified
 
-- 2026-11-14: carousel DfcKFJUEt6n (ceriina__, 7 children, media ids and child shortcodes match the earlier original-size verification exactly), single CI8MPDlHCpQ (gappex), reel poster C6SMF43vN85 (shaforostovadiana_). Small files were read back visually and matched the outfits, including the one-shoulder off-shoulder top in DfcKFJUEt6n child 4 that a caption-based reading had previously gotten wrong.
+- 2026-11-14: carousel DfcKFJUEt6n (ceriina__, 7 children, media ids and child shortcodes match the earlier original-size verification exactly), single CI8MPDlHCpQ (gappex), reel poster C6SMF43vN85 (shaforostovadiana_). Small files were read back visually and matched the posts' actual images, including a child image (DfcKFJUEt6n child 4) whose content a caption-based reading had previously gotten wrong.
 - 2026-11-14: first `tops` run over all 126 permalink items — 115 representatives via embed, 10 via og-fallback, 1 unreachable (above), no 429/403 encountered. Total media store 8.2 MB.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Fetch small images for posts in nyanshiba's Instagram saved collection
-「Museたん用」 so Muse can read the outfits with her own eyes.
+"""Fetch small images for posts in an Instagram saved collection,
+so Muse can read the images themselves instead of captions.
 
 Route (verified 2026-11-14): anonymous GET of
 https://www.instagram.com/p/{shortcode}/embed/captioned/ (no cookies),
@@ -15,7 +15,7 @@ Design rules (agreed 2026-11-14):
   ~/workspace/instagram/media/<shortcode>/<index>-small.jpg
 - Already-saved files are never re-fetched.
 - On HTTP 429 or 403 the run stops immediately (exit 5). No retries on those.
-- Scope is the 「Museたん用」 collection metadata file; nothing is written
+- Scope is the collection metadata file; nothing is written
   to Instagram and no credentials are used.
 
 Usage:
@@ -170,7 +170,7 @@ def fetch_post(session, shortcode, *, want_children, expected_children=None):
         # Some posts serve the logged-out app shell instead of embed media
         # (observed for sensitive / branded posts). Fall back to the post
         # page's og:image: a 640x640 centre crop of the first image. It is
-        # a provisional representative only — outfit may be cut off.
+        # a provisional representative only — the subject may be cut off.
         post_page = get(session, f"https://www.instagram.com/p/{shortcode}/")
         m = re.search(r'property="og:image" content="([^"]+)"', post_page)
         if not m:
