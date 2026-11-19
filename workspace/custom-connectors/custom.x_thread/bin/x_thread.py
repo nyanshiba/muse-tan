@@ -364,6 +364,9 @@ def to_tweet(j) -> dict:
             {
                 "id": str(quoted["id_str"]),
                 "author": (quoted.get("user") or {}).get("screen_name") or "?",
+                "favorite_count": quoted.get("favorite_count")
+                if isinstance(quoted.get("favorite_count"), int)
+                else None,
                 "text": quoted.get("text") or "",
                 "links": links_of(quoted),
                 "media": photos_of(quoted),
@@ -374,6 +377,9 @@ def to_tweet(j) -> dict:
         "id": j["id_str"],
         "author": (j.get("user") or {}).get("screen_name") or "?",
         "created_at": j.get("created_at"),
+        "favorite_count": j.get("favorite_count")
+        if isinstance(j.get("favorite_count"), int)
+        else None,
         "text": j.get("text") or "",
         "is_note": "note_tweet" in j,
         "is_article": bool(article),
@@ -740,6 +746,8 @@ def build(start_id: str) -> Thread:
                 entry["q"]["text"] = j.get("text") or entry["q"]["text"]
                 entry["q"]["links"] = links_of(j)
                 entry["q"]["media"] = photos_of(j)
+                if isinstance(j.get("favorite_count"), int):
+                    entry["q"]["favorite_count"] = j["favorite_count"]
             qt = j.get("quoted_tweet") or {}
             if qt.get("id_str"):
                 nid = str(qt["id_str"])
@@ -748,6 +756,9 @@ def build(start_id: str) -> Thread:
                         "q": {
                             "id": nid,
                             "author": (qt.get("user") or {}).get("screen_name") or "?",
+                            "favorite_count": qt.get("favorite_count")
+                            if isinstance(qt.get("favorite_count"), int)
+                            else None,
                             "text": qt.get("text") or "",
                             "links": links_of(qt),
                             "media": photos_of(qt),
@@ -779,6 +790,11 @@ def _media_path(post_id: str, index: int, url: str) -> str:
     if ext not in (".jpg", ".jpeg", ".png", ".webp"):
         ext = ".jpg"
     return os.path.join(MEDIA_DIR, post_id, f"{index}-{MEDIA_VARIANT}{ext}")
+
+
+def _fav_suffix(p: dict) -> str:
+    n = p.get("favorite_count")
+    return f" · fav {n}" if isinstance(n, int) else ""
 
 
 def _media_line(f: dict) -> str:
@@ -859,13 +875,13 @@ def render(t: Thread) -> str:
     )
     lines = [head]
     for i, p in enumerate(t.posts):
-        lines += ["", f"{i + 1}. {p['id']} · {p.get('created_at') or '?'}", post_text(p)]
+        lines += ["", f"{i + 1}. {p['id']} · {p.get('created_at') or '?'}{_fav_suffix(p)}", post_text(p)]
         for f in p.get("media_files") or []:
             lines.append(_media_line(f))
     if t.quoted:
         lines += ["", f"[x-thread] quoted by the thread ({len(t.quoted)}):"]
         for q in t.quoted:
-            lines.append(f"- {q['id']} · @{q['author']} · quoted by {q['quote_of']}")
+            lines.append(f"- {q['id']} · @{q['author']} · quoted by {q['quote_of']}{_fav_suffix(q)}")
             lines.append(f"  {expand_links(q['text'], q['links']).replace(chr(10), ' ')}")
             for f in q.get("media_files") or []:
                 lines.append(f"  {_media_line(f)}")
@@ -876,7 +892,7 @@ def render(t: Thread) -> str:
             f"by other authors ({len(t.ancestors)}):",
         ]
         for p in t.ancestors:
-            lines.append(f"- {p['id']} · @{p['author']} · {p.get('created_at') or '?'} → {p['parent'] or '-'}")
+            lines.append(f"- {p['id']} · @{p['author']} · {p.get('created_at') or '?'}{_fav_suffix(p)} → {p['parent'] or '-'}")
             lines.append(f"  {post_text(p).replace(chr(10), ' ')}")
             for f in p.get("media_files") or []:
                 lines.append(f"  {_media_line(f)}")
@@ -910,7 +926,7 @@ def render(t: Thread) -> str:
 
 
 def to_json(t: Thread) -> dict:
-    def shape(p, full=False):
+    def shape(p, full=False, fav=True):
         d = {
             "id": p["id"],
             "author": p["author"],
@@ -923,6 +939,8 @@ def to_json(t: Thread) -> dict:
             "parent": p["parent"],
             "url": f"https://x.com/{p['author']}/status/{p['id']}",
         }
+        if fav and isinstance(p.get("favorite_count"), int):
+            d["favorite_count"] = p["favorite_count"]
         if p.get("media_files"):
             d["media"] = p["media_files"]
         return d
@@ -935,6 +953,8 @@ def to_json(t: Thread) -> dict:
             "quote_of": q["quote_of"],
             "url": f"https://x.com/{q['author']}/status/{q['id']}",
         }
+        if isinstance(q.get("favorite_count"), int):
+            d["favorite_count"] = q["favorite_count"]
         if q.get("media_files"):
             d["media"] = q["media_files"]
         return d
@@ -949,7 +969,7 @@ def to_json(t: Thread) -> dict:
         "author": t.posts[0]["author"] if t.posts else None,
         "posts": [shape(p) for p in t.posts],
         "ancestors": [shape(p) for p in t.ancestors],
-        "replies": [shape(p) for p in t.replies],
+        "replies": [shape(p, fav=False) for p in t.replies],
         "quoted": [_shape_quoted(q) for q in t.quoted],
         "excluded": t.excluded,
         "diagnostics": {
@@ -1028,12 +1048,14 @@ def main(argv=None) -> int:
                 "parent": p["parent"],
                 "url": f"https://x.com/{p['author']}/status/{p['id']}",
             }
+            if isinstance(p.get("favorite_count"), int):
+                pd["favorite_count"] = p["favorite_count"]
             if p.get("media_files"):
                 pd["media"] = p["media_files"]
             print(json.dumps({"posts": [pd]}, ensure_ascii=False, indent=2))
         else:
             print(f"[x-thread] @{p['author']} / 1 post / start={start_id}")
-            print(f"\n1. {p['id']} · {p.get('created_at') or '?'}")
+            print(f"\n1. {p['id']} · {p.get('created_at') or '?'}{_fav_suffix(p)}")
             print(post_text(p))
             for f in p.get("media_files") or []:
                 print(_media_line(f))
