@@ -1,0 +1,5 @@
+name: "ios_pdf_reading"
+title: "Read iOS-Generated PDFs"
+description: "Use when reading a PDF made by iOS Safari or Shortcuts: this VM's poppler silently drops its Japanese glyphs, so read it with PyMuPDF instead."
+category: "Work and knowledge"
+include_in_prompt: true

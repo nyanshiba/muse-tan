@@ -1,0 +1,5 @@
+name: "opencode_delegation"
+title: "Delegate to the OpenCode LXC"
+description: "Use when delegating work to the OpenCode LXC: plan-restricted for research-only tasks, build-auto when the run may build or change things."
+category: "Work and knowledge"
+include_in_prompt: true

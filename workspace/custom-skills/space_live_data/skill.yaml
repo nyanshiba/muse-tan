@@ -1,0 +1,5 @@
+name: "space_live_data"
+title: "Build Spaces with Live Data"
+description: "Use when creating or changing a Space whose content lives in a workspace file: a fullstack server action reads the file live at view time instead of baking data into a static page."
+category: "Work and knowledge"
+include_in_prompt: true

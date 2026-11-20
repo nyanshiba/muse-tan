@@ -25,6 +25,10 @@ The root of this repository is the top level of Muse's System Files (the home di
 | [`workspace/custom-connectors/custom.instagram_media/`](workspace/custom-connectors/custom.instagram_media/README.md) | **Instagram Collection Media (embed, no login)** — fetches small images for posts in a saved Instagram collection from the anonymous embed endpoint, so Muse can read the images themselves instead of captions. Unlike x_thread it has a built-in upstream: collection metadata comes from Muse's built-in Instagram connector (`instagram-cli`, logged-in account); only the image fetch is anonymous. |
 | [`workspace/custom-skills/instagram_collection_media/`](workspace/custom-skills/instagram_collection_media/SKILL.md) | **Fetch Instagram Collection Images** — the companion skill: refresh on the user's word, read representatives in batches, fetch all children only for posts whose full content matters. |
 | [`AGENTS.md`](AGENTS.md) | **Operating conventions** — the working rules Museたん keeps in her home: where Muse instances tend to get stuck (congestion that gets polished away, annotation instead of deletion, compaction seams, silent tool failures) and the mechanism-level fix settled for each. |
+| [`workspace/custom-skills/space_live_data/`](workspace/custom-skills/space_live_data/SKILL.md) | **Build Spaces with Live Data** — choose static (baked-in) vs fullstack (live read) when building a Space: a fullstack server action runs on the Muse VM and can read workspace files by absolute path at view time, so updating the file is the whole update. |
+| [`workspace/custom-skills/opencode_delegation/`](workspace/custom-skills/opencode_delegation/SKILL.md) | **Delegate to the OpenCode LXC** — plan-restricted for research-only runs, build-auto when a run may build or change things. |
+| [`workspace/custom-skills/ios_pdf_reading/`](workspace/custom-skills/ios_pdf_reading/SKILL.md) | **Read iOS-Generated PDFs** — PDFs made by iOS Safari or Shortcuts use non-embedded CID fonts whose Japanese glyphs poppler silently drops; read them with PyMuPDF instead. |
+| [`workspace/custom-skills/pending_box/`](workspace/custom-skills/pending_box/SKILL.md) | **Pending Box （保留箱） Format and Procedure** — the canonical file, table format, cross-room check and showing rule for the pending tray whose resident core rule lives in AGENTS.md. |
 
 The helper, `x_thread.py`, is a single Python file using only the standard library, so it also works as a standalone CLI without Muse:
 
@@ -42,6 +46,11 @@ Copy the directories into the same paths in your Muse's home directory:
 - `workspace/custom-skills/x_post_fetch/` → `~/workspace/custom-skills/x_post_fetch/`
 - `workspace/custom-connectors/custom.instagram_media/` → `~/workspace/custom-connectors/custom.instagram_media/`
 - `workspace/custom-skills/instagram_collection_media/` → `~/workspace/custom-skills/instagram_collection_media/`
+- `AGENTS.md` → `~/AGENTS.md`
+- `workspace/custom-skills/space_live_data/` → `~/workspace/custom-skills/space_live_data/`
+- `workspace/custom-skills/opencode_delegation/` → `~/workspace/custom-skills/opencode_delegation/`
+- `workspace/custom-skills/ios_pdf_reading/` → `~/workspace/custom-skills/ios_pdf_reading/`
+- `workspace/custom-skills/pending_box/` → `~/workspace/custom-skills/pending_box/`
 
 No credentials or connection step are required for the connectors themselves; the descriptors set `require_auth: false`. The Instagram tool additionally relies on Muse's built-in Instagram connector (a logged-in account) for collection metadata — see its README for the upstream dependency.
 
