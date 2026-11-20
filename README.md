@@ -24,6 +24,7 @@ The root of this repository is the top level of Muse's System Files (the home di
 | [`workspace/custom-skills/x_post_fetch/`](workspace/custom-skills/x_post_fetch/SKILL.md) | **Read X Posts and Threads** — the companion skill that routes X links to the connector above. |
 | [`workspace/custom-connectors/custom.instagram_media/`](workspace/custom-connectors/custom.instagram_media/README.md) | **Instagram Collection Media (embed, no login)** — fetches small images for posts in a saved Instagram collection from the anonymous embed endpoint, so Muse can read the images themselves instead of captions. Unlike x_thread it has a built-in upstream: collection metadata comes from Muse's built-in Instagram connector (`instagram-cli`, logged-in account); only the image fetch is anonymous. |
 | [`workspace/custom-skills/instagram_collection_media/`](workspace/custom-skills/instagram_collection_media/SKILL.md) | **Fetch Instagram Collection Images** — the companion skill: refresh on the user's word, read representatives in batches, fetch all children only for posts whose full content matters. |
+| [`AGENTS.md`](AGENTS.md) | **Operating conventions** — the working rules Museたん keeps in her home: where Muse instances tend to get stuck (congestion that gets polished away, annotation instead of deletion, compaction seams, silent tool failures) and the mechanism-level fix settled for each. |
 
 The helper, `x_thread.py`, is a single Python file using only the standard library, so it also works as a standalone CLI without Muse:
 
