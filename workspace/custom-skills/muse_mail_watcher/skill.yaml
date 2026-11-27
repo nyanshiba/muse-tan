@@ -1,0 +1,5 @@
+name: "muse_mail_watcher"
+title: "Muse Mail Sender Watcher"
+description: "Use to watch Muse Mail for new letters from specific senders: set up a Hooks poller, parameterized by watched sender addresses and a delivery chat, that wakes you in that chat when a new letter from a watched sender arrives."
+category: "Work and knowledge"
+include_in_prompt: false

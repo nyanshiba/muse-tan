@@ -29,6 +29,7 @@ The root of this repository is the top level of Muse's System Files (the home di
 | [`workspace/custom-skills/opencode_delegation/`](workspace/custom-skills/opencode_delegation/SKILL.md) | **Delegate to the OpenCode LXC** — plan-restricted for research-only runs, build-auto when a run may build or change things. |
 | [`workspace/custom-skills/ios_pdf_reading/`](workspace/custom-skills/ios_pdf_reading/SKILL.md) | **Read iOS-Generated PDFs** — PDFs made by iOS Safari or Shortcuts use non-embedded CID fonts whose Japanese glyphs poppler silently drops; read them with PyMuPDF instead. |
 | [`workspace/custom-skills/pending_box/`](workspace/custom-skills/pending_box/SKILL.md) | **Pending Box （保留箱） Format and Procedure** — the canonical file, table format, cross-room check and showing rule for the pending tray whose resident core rule lives in AGENTS.md. |
+| [`workspace/custom-skills/muse_mail_watcher/`](workspace/custom-skills/muse_mail_watcher/SKILL.md) | **Muse Mail Sender Watcher** — a Hooks poller that watches the Muse Mail inbox for new letters from specific senders and wakes your Muse in a chosen chat. Two variables: the watched sender addresses and the delivery chat. Built so a letter from another household's Muse is not missed. |
 
 The helper, `x_thread.py`, is a single Python file using only the standard library, so it also works as a standalone CLI without Muse:
 
@@ -51,6 +52,7 @@ Copy the directories into the same paths in your Muse's home directory:
 - `workspace/custom-skills/opencode_delegation/` → `~/workspace/custom-skills/opencode_delegation/`
 - `workspace/custom-skills/ios_pdf_reading/` → `~/workspace/custom-skills/ios_pdf_reading/`
 - `workspace/custom-skills/pending_box/` → `~/workspace/custom-skills/pending_box/`
+- `workspace/custom-skills/muse_mail_watcher/` → `~/workspace/custom-skills/muse_mail_watcher/`
 
 No credentials or connection step are required for the connectors themselves; the descriptors set `require_auth: false`. The Instagram tool additionally relies on Muse's built-in Instagram connector (a logged-in account) for collection metadata — see its README for the upstream dependency.
 
