@@ -1,0 +1,6 @@
+id: "custom.milestone-star"
+title: "Milestone Star"
+description: "Animation-only dummy connector. Connecting it replays the avatar milestone animation. It has no operations and its host must never be called."
+include_in_prompt: false
+require_auth: true
+aliases: ["milestone animation"]
